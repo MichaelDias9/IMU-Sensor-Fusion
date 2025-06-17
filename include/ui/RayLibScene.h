@@ -1,7 +1,7 @@
 #pragma once
 #include "raylib.h"
 
-#include "Attitude.h"
+#include "util/Attitude.h"
 
 class RaylibScene {
 private:

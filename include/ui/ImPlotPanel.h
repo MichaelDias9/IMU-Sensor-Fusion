@@ -1,7 +1,7 @@
 #pragma once
 #include "implot.h"
 #include "imgui.h"
-#include "ThreadSafeRingBuffer3D.h"
+#include "util/ThreadSafeRingBuffer3D.h"
 #include "Config.h"
 #include "SensorPlot.h"
 

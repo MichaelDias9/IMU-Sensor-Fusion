@@ -10,6 +10,40 @@ class ThreadSafeRingBuffer3D {
 public:
     ThreadSafeRingBuffer3D() : head(0), count(0) {}
 
+    void append(float x, float y, float z) {
+        std::lock_guard<std::mutex> lock(mtx);
+
+        if (head + 1 <= 2 * Capacity) {   // No overflow
+            xBuffer[head] = x;
+            yBuffer[head] = y;
+            zBuffer[head] = z;
+
+            head += 1;
+            count = std::min(count + 1, Capacity);
+        } else {                          // Overflow - shift everything left by 1
+            std::size_t elements_to_keep = Capacity - 1;
+
+           // Move the most recent data from second half to front of buffer
+            std::copy(xBuffer.begin() + (head - elements_to_keep), 
+                      xBuffer.begin() + head, 
+                      xBuffer.begin());
+            std::copy(yBuffer.begin() + (head - elements_to_keep), 
+                      yBuffer.begin() + head, 
+                      yBuffer.begin());
+            std::copy(zBuffer.begin() + (head - elements_to_keep), 
+                      zBuffer.begin() + head, 
+                      zBuffer.begin());
+
+            // Add new element at the end
+            xBuffer[elements_to_keep] = x;
+            yBuffer[elements_to_keep] = y;
+            zBuffer[elements_to_keep] = z;
+
+            head = Capacity;
+            count = Capacity;
+        }
+    }
+
     void append(const float* xData, const float* yData, const float* zData, std::size_t len) {
         if (len > Capacity) {
             throw std::length_error("Buffer cannot fit data");

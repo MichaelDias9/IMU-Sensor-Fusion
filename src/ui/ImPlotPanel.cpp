@@ -1,4 +1,4 @@
-#include "ImPlotPanel.h"
+#include "ui/ImPlotPanel.h"
 
 ImPlotPanel::ImPlotPanel(int posX, int posY, int width, int height, 
                          const GyroBuffer& gyroDataBuffer_ref,

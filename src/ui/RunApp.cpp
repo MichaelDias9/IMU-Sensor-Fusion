@@ -1,16 +1,16 @@
-#include "RunApp.h"
-#include "Config.h"
-#include "Attitude.h"
-#include "RayLibScene.h"
-#include "ImPlotPanel.h"
-#include "ImGuiPanel.h"
-#include "ThreadSafeRingBuffer3D.h"
+#include "ui/RunApp.h"
 
+#include "Config.h"
+#include "util/Attitude.h"
+
+#include "ui/RayLibScene.h"
+#include "ui/ImPlotPanel.h"
+#include "ui/ImGuiPanel.h"
+#include "util/ThreadSafeRingBuffer3D.h"
 
 #include "rlImGui.h"
 #include "imgui.h"
 #include "implot.h"
-
 
 void runApp(const GyroBuffer &gyroDataBuffer, 
             const AccelBuffer& accelDataBuffer, 
@@ -19,7 +19,7 @@ void runApp(const GyroBuffer &gyroDataBuffer,
             const AccelTimesBuffer &accelTimeBuffer,
             const MagTimesBuffer &magTimeBuffer,
             Attitude &estimatedAttitude,
-            float& alpha_) 
+            float& KpRollPitch, float& KpYaw, float& KiRollPitch, float& KiYaw) 
 { 
   // Initialize window with config values
   InitWindow(screenWidth, screenHeight, "IMU + Attitude Estimation");
@@ -40,7 +40,7 @@ void runApp(const GyroBuffer &gyroDataBuffer,
                         gyroDataBuffer, accelDataBuffer, magDataBuffer, gyroTimeBuffer, accelTimeBuffer, magTimeBuffer);
 
   // Initialize GUI
-  ImGuiPanel guiPanel(screenWidth/2, 0, screenWidth/2, screenHeight/2, estimatedAttitude, alpha_);
+  ImGuiPanel guiPanel(screenWidth/2, 0, screenWidth/2, screenHeight/2, estimatedAttitude, KpRollPitch, KpYaw, KiRollPitch, KiYaw);
   
   // Run Main Loop
   while (!WindowShouldClose()) {

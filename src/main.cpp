@@ -4,11 +4,11 @@
 #include <boost/asio.hpp>
 
 #include "Config.h"
-#include "Attitude.h"
-
-#include "WebSocketSession.h"
+#include "util/Attitude.h"
+#include "communication/WebSocketSession.h"
+#include "communication/USBReceiver.h"
 #include "ComplementaryFilter.h"
-#include "RunApp.h"
+#include "ui/RunApp.h"
 
 // Function to pre-fill the buffers with empty data
 void prefillBuffers(GyroBuffer& gyroDataBuffer, AccelBuffer& accelDataBuffer, MagBuffer& magDataBuffer, 
@@ -61,35 +61,63 @@ void prefillBuffers(GyroBuffer& gyroDataBuffer, AccelBuffer& accelDataBuffer, Ma
 
 int main() {
     // Initialize Buffers
-    GyroBuffer gyroDataBuffer;
-    AccelBuffer accelDataBuffer;
-    MagBuffer magDataBuffer;
-    GyroTimesBuffer gyroTimesBuffer;
-    AccelTimesBuffer accelTimesBuffer;
-    MagTimesBuffer magTimesBuffer;
+    GyroBuffer gyroDataBuffer; AccelBuffer accelDataBuffer; MagBuffer magDataBuffer;
+    GyroTimesBuffer gyroTimesBuffer; AccelTimesBuffer accelTimesBuffer; MagTimesBuffer magTimesBuffer;
     prefillBuffers(gyroDataBuffer, accelDataBuffer, magDataBuffer, gyroTimesBuffer, accelTimesBuffer, magTimesBuffer);
 
     // Initialize the shared attitude object
-    Attitude estimatedAttitude = {0.0f, 0.0f, 0.0f, 1.0, 0.0, 0.0, 0.0}; // Roll, Pitch, Yaw, w, x, y, z
+    Attitude estimatedAttitude = { 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 }; // Roll, Pitch, Yaw, w, x, y, z
+
+    // Initialize the shared filter constants
+    float DynamicKpRollPitch = KpRollPitch;
+    float DynamicKpYaw = KpYaw;
+    float DynamicKiRollPitch = KiRollPitch;
+    float DynamicKiYaw = KiYaw;
 
     // Create the complementary filter object for estimating the attitude
-    float alpha = compFilterAlpha;
-    int filterFrequency = compFilterFrequency;
-    const float filterTimeDelta = 1.0f / filterFrequency;
-    ComplementaryFilter complementaryFilter(alpha, filterFrequency, filterTimeDelta,
-                                            gyroDataBuffer, accelDataBuffer, gyroTimesBuffer, accelTimesBuffer, 
-                                            estimatedAttitude);
+    ComplementaryFilter complementaryFilter(DynamicKpRollPitch, DynamicKpYaw, DynamicKiRollPitch, DynamicKiYaw, estimatedAttitude);
     
-    // Start WebSocket Thread. Receives and timestamps sensor data and triggers complementary filter updates
+    // Start websocket or USB thread. Receives and timestamps sensor data and triggers complementary filter updates
+    std::optional<std::thread> usbThread;
+    std::optional<USBReceiver> usbReceiver;
+
+    // Start the web socket server on a separate thread
     boost::asio::io_context ioc;
-    WebSocketSession socketServer(ioc, 8000, gyroDataBuffer, accelDataBuffer, magDataBuffer, 
-                                  gyroTimesBuffer, accelTimesBuffer, magTimesBuffer, complementaryFilter);
+    WebSocketSession server(ioc, 8000, gyroDataBuffer, accelDataBuffer, magDataBuffer, 
+                                      gyroTimesBuffer, accelTimesBuffer, magTimesBuffer, complementaryFilter);
+
+    server.run();
     std::thread socketThread([&ioc]() { ioc.run(); });
 
+    if (connectionMode == 'u') {
+        // Initialize USB receiver with buffer references
+        usbReceiver.emplace(gyroDataBuffer, accelDataBuffer, magDataBuffer,
+                            gyroTimesBuffer, accelTimesBuffer, magTimesBuffer, complementaryFilter);
+        
+        // Initialize the USB connection
+        if (!usbReceiver->initialize()) {
+            std::cerr << "Failed to initialize USB receiver" << std::endl;
+            return -1;
+        }
+        
+        // List available devices for debugging
+        usbReceiver->listDevices();
+        
+        // Start USB receiving thread
+        usbThread.emplace([&usbReceiver]() { usbReceiver->startReceiving(); });
+    }
+
     // Run App Window
-    runApp(gyroDataBuffer, accelDataBuffer, magDataBuffer, gyroTimesBuffer, accelTimesBuffer, magTimesBuffer, estimatedAttitude, alpha);
+    runApp(gyroDataBuffer, accelDataBuffer, magDataBuffer, gyroTimesBuffer, accelTimesBuffer, magTimesBuffer, 
+           estimatedAttitude, DynamicKpRollPitch, DynamicKpYaw, DynamicKiRollPitch, DynamicKiYaw);
 
     // Clean up on exit
+    if (usbReceiver) {
+        usbReceiver->stop();  // Signal USB receiver to stop
+        if (usbThread && usbThread->joinable()) {
+            usbThread->join();  // Wait for USB thread to finish
+        }
+    }
     ioc.stop();
     socketThread.join();
 }

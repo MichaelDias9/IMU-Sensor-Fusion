@@ -2,7 +2,7 @@
 #include <regex>
 #include <sstream>
 
-#include "WebSocketSession.h"
+#include "communication/WebSocketSession.h"
 #include "Config.h"
 
 #include "ComplementaryFilter.h"
@@ -78,11 +78,6 @@ void WebSocketSession::processMessage(size_t bytes) {
     auto duration = now - firstTimestamp_;
     float timeInSeconds = std::chrono::duration<float>(duration).count();
 
-    // Check if complementary filter needs to be updated
-    if (timeInSeconds > complementaryFilter_.currentTime_ + complementaryFilter_.deltaTime_) {
-        complementaryFilter_.update();
-    }
-
     // Verify minimum message length (flags + space)
     if (msg.size() < 4 || msg[3] != ' ') {
         std::cerr << "[Server] Invalid message format" << std::endl;
@@ -116,24 +111,25 @@ void WebSocketSession::processMessage(size_t bytes) {
         return;
     }
 
-    // Process sensor data in order
-    size_t index = 0;
+    // Process sensor data 
+    size_t index = 0;  
+
     if (hasGyro) {
-        gyroDataBuffer_.append(&values[index], &values[index+1], &values[index+2], 1);
+        complementaryFilter_.updateWithGyro(values[index], values[index+1], values[index+2]);
+        gyroDataBuffer_.append(values[index], values[index+1], values[index+2]);
         gyroTimesBuffer_.append(timeInSeconds);
         index += 3;
-        foundData = true;
     }
     if (hasAccel) {
-        accelDataBuffer_.append(&values[index], &values[index+1], &values[index+2], 1);
+        complementaryFilter_.updateWithAccel(values[index], values[index+1], values[index+2]);
+        accelDataBuffer_.append(values[index], values[index+1], values[index+2]);
         accelTimesBuffer_.append(timeInSeconds);
         index += 3;
-        foundData = true;
     }
     if (hasMag) {
-        magDataBuffer_.append(&values[index], &values[index+1], &values[index+2], 1);
+        magDataBuffer_.append(values[index], values[index+1], values[index+2]);
         magTimesBuffer_.append(timeInSeconds);
-        foundData = true;
+        index += 3;
     }
 
     if (!foundData) {

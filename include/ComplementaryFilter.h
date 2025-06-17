@@ -1,57 +1,33 @@
 #pragma once
 #include "Config.h"
-#include "Attitude.h"
+#include "util/Attitude.h"
+#include "util/Quaternion.h"
 #include "ComplementaryFilter.h"
-
-struct Vector3 {
-    float x, y, z;
-};
-
-struct Quaternion {
-    float w, x, y, z;
-};
 
 class ComplementaryFilter {
 public:
-    ComplementaryFilter(float& alpha, int& filterFrequency, float filterTimeDelta,
-                       GyroBuffer& gyroBuffer, AccelBuffer& accelBuffer,
-                       GyroTimesBuffer& gyroTimeBuffer, AccelTimesBuffer& accelTimeBuffer,
-                       Attitude& attitude);
-    void update();
+    ComplementaryFilter(float& KpRollPitch, float& KpYaw, float& KiRollPitch, float& KiYaw, Attitude& attitude);
+    void updateWithGyro(float gyroX, float gyroY, float gyroZ);
+    void updateWithAccel(float accelX, float accelY, float accelZ);
 
 private: 
-    Attitude& attitude_;
-    
-    GyroBuffer& gyroBuffer_;
-    AccelBuffer& accelBuffer_;
-    GyroTimesBuffer& gyroTimeBuffer_;
-    AccelTimesBuffer& accelTimeBuffer_;
-
     bool running_;
 
-    float& alpha_;
-    const float filterFrequency_;
-    const float deltaTime_;
-    float currentTime_ = 0.0f;
-    
-    std::size_t previousGyroIndex_ = gyroBufferSize - 1;
-    std::size_t previousAccelIndex_ = accelBufferSize - 1;    
+    Vector3 exptectedGravityWorld_ = {0.0f, 0.0f, -1.0f};
+    Vector3 exptectedNorthWorld_ = {1.0f, 0.0f, 0.0f};
 
-    Vector3 bodyToReferenceFrameRates(const Vector3& bodyRates, float currentPitch, float currentRoll);
+    Attitude& attitude_;
+    Quaternion quaternion_ = {1.0f, 0.0f, 0.0f, 0.0f};
 
-    Vector3 calculateWeightedAccelAverage(std::size_t latestAccelIndex,
-                                          float timeContributionOfNewestAccelData,
-                                          float timeContributionOfOldestAccelData);
+    const float& KpRollPitch_;
+    const float& KpYaw_;
+    const float& KiRollPitch_;
+    const float& KiYaw_;  
 
-    Vector3 integrateWeightedGyroReadingsInReferenceFrame(std::size_t latestGyroIndex,
-                                                          float timeContributionOfNewestGyroData,
-                                                          float timeContributionOfOldestGyroData);
-
-
-    void logFilterDebugInfo(std::size_t latestAccelIndex, float accelMostRecentTime,
-                            float timeContributionOfNewestAccelData,
-                            float timeContributionOfOldestAccelData,
-                            float deltaTimeWithoutPartialDataAccel) const;                                          
-
-    friend class WebSocketSession;                                  
+    float PTermRoll_ = 0.0f;
+    float PTermPitch_ = 0.0f;
+    float PTermYaw_ = 0.0f;
+    float ITermRoll_ = 0.0f;
+    float ITermPitch_ = 0.0f;
+    float ITermYaw_ = 0.0f;                   
 };

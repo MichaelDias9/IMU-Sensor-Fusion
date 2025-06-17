@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Config.h"
-#include "Attitude.h"
-#include "ThreadSafeRingBuffer3D.h"
+#include "util/Attitude.h"
+#include "util/ThreadSafeRingBuffer3D.h"
 
 void runApp(const GyroBuffer &gyroBuffer, 
             const AccelBuffer &accelBuffer,
@@ -11,4 +11,4 @@ void runApp(const GyroBuffer &gyroBuffer,
             const AccelTimesBuffer &accelTimesBuffer,
             const MagTimesBuffer &magTimesBuffer,
             Attitude &estimatedAttitude,
-            float& alpha_);
+            float& KpRollPitch, float& KpYaw, float& KiRollPitch, float& KiYaw);
