@@ -62,7 +62,6 @@ void WebSocketSession::readLoop() {
 
 void WebSocketSession::processMessage(size_t bytes) {
     std::string msg(static_cast<char*>(buffer_.data().data()), bytes);
-    // print message
     std::cout << "[Server] Received message: " << msg << std::endl;
     
     // Current timestamp
@@ -86,9 +85,9 @@ void WebSocketSession::processMessage(size_t bytes) {
     }
 
     // Parse sensor flags
-    bool hasGyro = (msg[0] == '1');
+    bool hasMag = (msg[0] == '1');
     bool hasAccel = (msg[1] == '1');
-    bool hasMag = (msg[2] == '1');
+    bool hasGyro = (msg[2] == '1');
     std::string dataStr = msg.substr(4);
     
     // Split comma-separated values
@@ -114,11 +113,10 @@ void WebSocketSession::processMessage(size_t bytes) {
 
     // Process sensor data 
     size_t index = 0;  
-
-    if (hasGyro) {
-        complementaryFilter_.updateWithGyro(values[index], values[index+1], values[index+2]);
-        gyroDataBuffer_.append(values[index], values[index+1], values[index+2]);
-        gyroTimesBuffer_.append(timeInSeconds);
+    if (hasMag) {
+        complementaryFilter_.updateWithMag(values[index], values[index+1], values[index+2]);
+        magDataBuffer_.append(values[index], values[index+1], values[index+2]);
+        magTimesBuffer_.append(timeInSeconds);
         index += 3;
     }
     if (hasAccel) {
@@ -127,9 +125,10 @@ void WebSocketSession::processMessage(size_t bytes) {
         accelTimesBuffer_.append(timeInSeconds);
         index += 3;
     }
-    if (hasMag) {
-        magDataBuffer_.append(values[index], values[index+1], values[index+2]);
-        magTimesBuffer_.append(timeInSeconds);
+    if (hasGyro) {
+        complementaryFilter_.updateWithGyro(values[index], values[index+1], values[index+2]);
+        gyroDataBuffer_.append(values[index], values[index+1], values[index+2]);
+        gyroTimesBuffer_.append(timeInSeconds);
         index += 3;
     }
 }

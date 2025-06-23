@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(IMUTool LANGUAGES CXX)
+project(IMUTool LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -16,10 +16,9 @@ if (WIN32)
 else()
     cmake_policy(SET CMP0167 NEW)   # Suppress warning, use modern behavior
 endif()
-
 find_package(Boost 1.87.0 REQUIRED COMPONENTS system thread)
 
-# --- Get Raylib --- # 
+# --- Raylib --- # 
 include(FetchContent)
 FetchContent_Declare(
     raylib
@@ -51,11 +50,6 @@ target_include_directories(rlImGui PUBLIC
 )
 target_link_libraries(rlImGui PUBLIC raylib imgui)
 
-# --- libusb --- #
-# file(GLOB LIBUSB_SOURCES third_party/libusb/*.c)
-# add_library(libusb STATIC ${LIBUSB_SOURCES})
-# target_include_directories(libusb PUBLIC third_party/libusb)
-
 # --- Main executable --- #
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
 add_executable(${PROJECT_NAME} ${SOURCES})
@@ -63,7 +57,6 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE 
     include
     ${Boost_INCLUDE_DIRS}
-    # ${LIBUSB_INCLUDE_DIRS}
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE 
@@ -71,10 +64,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Boost::thread
     rlImGui # Links raylib transitively
     implot  # Links imgui transitively
-    # ${LIBUSB_LIBRARIES}
 )
-
-target_compile_options(${PROJECT_NAME} PRIVATE ${LIBUSB_CFLAGS_OTHER})
 
 # --- Resources --- #
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD

@@ -1,33 +1,39 @@
 #pragma once
 #include "Config.h"
-#include "util/Attitude.h"
-#include "util/Quaternion.h"
+#include "util/Structs3D.h"
+#include "util/Math3D.h"
 #include "ComplementaryFilter.h"
+
+using namespace Structs3D;
 
 class ComplementaryFilter {
 public:
-    ComplementaryFilter(float& KpRollPitch, float& KpYaw, float& KiRollPitch, float& KiYaw, Attitude& attitude);
+    ComplementaryFilter(QuaternionF& attitude, Vector3F& magVector);
     void updateWithGyro(float gyroX, float gyroY, float gyroZ);
     void updateWithAccel(float accelX, float accelY, float accelZ);
+    void updateWithMag(float magX, float magY, float magZ);
 
 private: 
     bool running_;
 
-    Vector3 exptectedGravityWorld_ = {0.0f, 0.0f, -1.0f};
-    Vector3 exptectedNorthWorld_ = {1.0f, 0.0f, 0.0f};
+    Vector3F exptectedGravityWorld_ = {0.0f, 0.0f, -1.0f};
+    Vector3F exptectedEastWorld_ = {0.0f, 1.0f, 0.0f};
 
-    Attitude& attitude_;
-    Quaternion quaternion_ = {1.0f, 0.0f, 0.0f, 0.0f};
+    QuaternionF& attitude_;
+    Vector3F& magVector_;
+    QuaternionF quaternion_ = {0.0f, 1.0f, 0.0f, 0.0f};
 
-    const float& KpRollPitch_;
-    const float& KpYaw_;
-    const float& KiRollPitch_;
-    const float& KiYaw_;  
+    float KpRollPitch_ = KpRollPitch;
+    float KpYaw_ = KpYaw;
+    float KiRollPitch_ = KiRollPitch;
+    float KiYaw_ = KiYaw;
 
     float PTermRoll_ = 0.0f;
     float PTermPitch_ = 0.0f;
     float PTermYaw_ = 0.0f;
     float ITermRoll_ = 0.0f;
     float ITermPitch_ = 0.0f;
-    float ITermYaw_ = 0.0f;                   
+    float ITermYaw_ = 0.0f;            
+
+    friend class ImGuiPanel;       
 };

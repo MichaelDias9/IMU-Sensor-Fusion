@@ -1,8 +1,9 @@
 #pragma once
 
 #include "Config.h"
-#include "util/Attitude.h"
+#include "util/Structs3D.h"
 #include "util/ThreadSafeRingBuffer3D.h"
+#include "ComplementaryFilter.h"
 
 void runApp(const GyroBuffer &gyroBuffer, 
             const AccelBuffer &accelBuffer,
@@ -10,5 +11,6 @@ void runApp(const GyroBuffer &gyroBuffer,
             const GyroTimesBuffer &gyroTimesBuffer,
             const AccelTimesBuffer &accelTimesBuffer,
             const MagTimesBuffer &magTimesBuffer,
-            Attitude &estimatedAttitude,
-            float& KpRollPitch, float& KpYaw, float& KiRollPitch, float& KiYaw);
+            Structs3D::QuaternionF &estimatedAttitude,
+            Structs3D::Vector3F& accelVector,
+            ComplementaryFilter &complementaryFilter);

@@ -9,22 +9,19 @@ const int screenWidth = 1280;
 const int screenHeight = 800;
 const int targetFPS = 60;
 
-// Connection settings
-const char connectionMode = 'w';                // 'w' for websocket, 'u' for USB
-
 // Sensor frequencies
-constexpr int gyroFreq = 100;
-constexpr int accelFreq = 100;
+constexpr int gyroFreq = 150;
+constexpr int accelFreq = 150;
 constexpr int magFreq = 30;
 constexpr float gyroDeltaT = 1.0f / gyroFreq;
 constexpr float accelDeltaT = 1.0f / accelFreq;
 constexpr float magDeltaT = 1.0f / magFreq;
 
 // Complementary filter settings
-const float KpRollPitch = 10.0f;
-const float KiRollPitch = 1.0f;
-const float KpYaw = 10.0f;
-const float KiYaw = 1.0f;
+const float KpRollPitch = 6.0f;
+const float KiRollPitch = 0.1f;
+const float KpYaw = 4.0f;
+const float KiYaw = 0.05f;
 
 // Plot settings
 static constexpr size_t MAX_PLOT_POINTS = 1000; // ImPlot downsampling threshold

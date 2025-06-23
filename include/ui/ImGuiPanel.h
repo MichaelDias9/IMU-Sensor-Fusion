@@ -1,6 +1,7 @@
 #pragma once
 #include "imgui.h"
-#include "util/Attitude.h"
+#include "util/Structs3D.h"
+#include "ComplementaryFilter.h"
 
 class ImGuiPanel {
 private:
@@ -8,13 +9,11 @@ private:
     int m_posY;
     int m_width;
     int m_height;
-    Attitude& attitude_;
-    float& KpRollPitch_;
-    float& KpYaw_;
-    float& KiRollPitch_;
-    float& KiYaw_;
+    Structs3D::QuaternionF& attitude_;
+    ComplementaryFilter& filter_;
+    
 
 public:
-    ImGuiPanel(int posX, int posY, int width, int height, Attitude& attitude, float& KpRollPitch, float& KpYaw, float& KiRollPitch, float& KiYaw);
+    ImGuiPanel(int posX, int posY, int width, int height, Structs3D::QuaternionF& attitude, ComplementaryFilter& complementaryFilter);
     void Draw();
 };

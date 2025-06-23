@@ -4,40 +4,33 @@
 #include "Config.h"
 #include "ComplementaryFilter.h"
 
-ComplementaryFilter::ComplementaryFilter(float& KpRollPitch, float& KpYaw, float& KiRollPitch, float& KiYaw, Attitude& attitude) :
-    KpRollPitch_(KpRollPitch), KpYaw_(KpYaw), KiRollPitch_(KiRollPitch), KiYaw_(KiYaw), attitude_(attitude) {}
+using namespace Math3D;
+using namespace Structs3D;
 
-void ComplementaryFilter::updateWithGyro(float gyroX, float gyroY, float gyroZ){
-    // Correct gyro data with integral terms and proportional terms
-    gyroX -= ITermRoll_ * gyroDeltaT;
-    gyroY -= ITermPitch_ * gyroDeltaT;
-    gyroZ -= ITermYaw_ * gyroDeltaT;
+ComplementaryFilter::ComplementaryFilter(QuaternionF& attitude, Vector3F& magVector) : attitude_(attitude), magVector_(magVector) {}
 
-    // Only use proportional terms once. Accel and mag readings will sets the values again when measurements are available
+void ComplementaryFilter::updateWithGyro(float gyroX, float gyroY, float gyroZ){    
+    // Correct with proportional terms and reset. Accel and mag updates will set P terms again
     if (PTermRoll_ != 0.0f && PTermPitch_ != 0.0f) {   
-        gyroX -= PTermRoll_;
-        gyroY -= PTermPitch_;
+        gyroX += PTermRoll_;
+        gyroY += PTermPitch_;
         PTermRoll_ = 0.0f;
         PTermPitch_ = 0.0f;
     }
     if (PTermYaw_ != 0.0f) {
-        gyroZ -= PTermYaw_;
+        gyroZ += PTermYaw_;
         PTermYaw_ = 0.0f;
     }
+
+    // Correct gyro data with integral terms
+    gyroX += ITermRoll_;
+    gyroY += ITermPitch_;
+    gyroZ += ITermYaw_; 
 
     // Update quaternion with corrected gyro data and normalize 
     quaternion_ = updateQuaternionWithAngularVelocity(quaternion_, gyroX, gyroY, gyroZ, gyroDeltaT);
     quaternion_ = normalizeQuaternion(quaternion_);
 
-    // Calculate the new pitch, roll, and yaw from the quaternion
-    float newPitch = atan2(2 * (quaternion_.w * quaternion_.z + quaternion_.x * quaternion_.y), 1 - 2 * (quaternion_.y * quaternion_.y + quaternion_.z * quaternion_.z));
-    float newRoll = asin(2 * (quaternion_.w * quaternion_.x - quaternion_.y * quaternion_.z));
-    float newYaw = atan2(2 * (quaternion_.w * quaternion_.y + quaternion_.x * quaternion_.z), 1 - 2 * (quaternion_.x * quaternion_.x + quaternion_.y * quaternion_.y));
-
-    // Update the attitude with the new estimate
-    attitude_.pitch = newPitch;
-    attitude_.roll = newRoll;
-    attitude_.yaw = newYaw;
     attitude_.w = quaternion_.w;
     attitude_.x = quaternion_.x;
     attitude_.y = quaternion_.y;
@@ -45,19 +38,44 @@ void ComplementaryFilter::updateWithGyro(float gyroX, float gyroY, float gyroZ){
 }
 
 void ComplementaryFilter::updateWithAccel(float accelX, float accelY, float accelZ){
-    // Get the roll and pitch estimates from the accelerometer
-    float roll = atan2(accelY, accelZ);
-    float pitch = atan2(-accelX, sqrt(accelY * accelY + accelZ * accelZ));
+    // Normalize the accel vector 
+    Vector3F accelVector = normalizeVector(Vector3F(accelX, accelY, accelZ));
 
-    // Get the expected gravity vector in the body frame
-    Vector3 expectedGravityBody = rotateVectorByQuaternion(exptectedGravityWorld_, quaternion_);
+    // Get the expected gravity vector in the body frame using INVERSE rotation
+    QuaternionF invQuaternion = conjugateQuaternion(quaternion_);
+    Vector3F expectedGravityBody = rotateVectorByQuaternion(exptectedGravityWorld_, invQuaternion);
 
     // Get the error between the expected gravity and the measured gravity with cross product
-    Vector3 error = crossProduct(Vector3(accelX, accelY, accelZ), expectedGravityBody);
+    Vector3F error = crossProduct(accelVector, expectedGravityBody);
 
-    // Update the correction vector 
+    // Update the correction vectors
     PTermRoll_ = KpRollPitch_ * error.x;
-    PTermPitch_ = KpRollPitch_ * error.y;
+    PTermPitch_ = KpRollPitch_ * error.y;   
     ITermRoll_ += KiRollPitch_ * error.x * gyroDeltaT;
     ITermPitch_ += KiRollPitch_ * error.y * gyroDeltaT;
+}
+
+void ComplementaryFilter::updateWithMag(float magX, float magY, float magZ){
+    // Normalize the mag vector
+    Vector3F magVector = normalizeVector(Vector3F(magX, magY, magZ));   
+
+    // Get the down vector in the body frame using INVERSE rotation
+    QuaternionF invQuaternion = conjugateQuaternion(quaternion_);
+    Vector3F downBody = rotateVectorByQuaternion(Vector3F(0.0f, 0.0f, 1.0f), invQuaternion);
+
+    //Get the measuredEast vector in the body frame using cross product with down body vector
+    Vector3F measuredEastBody = crossProduct(downBody, magVector);
+
+    // Get the expected east vector in the body frame using INVERSE rotation
+    Vector3F expectedEastBody = rotateVectorByQuaternion(exptectedEastWorld_, invQuaternion);
+
+    // Get measured east vector in the world frame using rotation
+    Vector3F measuredEastWorld = rotateVectorByQuaternion(measuredEastBody, quaternion_);
+    
+    // Get the error between the expected east and the measured east with cross product
+    Vector3F error = crossProduct(measuredEastBody, expectedEastBody);
+
+    // Update the correction vector
+    PTermYaw_ = KpYaw_ * error.z;
+    ITermYaw_ += KiYaw_ * error.z * gyroDeltaT;
 }
