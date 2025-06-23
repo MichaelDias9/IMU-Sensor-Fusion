@@ -62,7 +62,8 @@ void WebSocketSession::readLoop() {
 
 void WebSocketSession::processMessage(size_t bytes) {
     std::string msg(static_cast<char*>(buffer_.data().data()), bytes);
-    bool foundData = false;
+    // print message
+    std::cout << "[Server] Received message: " << msg << std::endl;
     
     // Current timestamp
     auto now = std::chrono::steady_clock::now();
@@ -130,9 +131,5 @@ void WebSocketSession::processMessage(size_t bytes) {
         magDataBuffer_.append(values[index], values[index+1], values[index+2]);
         magTimesBuffer_.append(timeInSeconds);
         index += 3;
-    }
-
-    if (!foundData) {
-        std::cerr << "[Server] No valid sensor data found in message" << std::endl;
     }
 }

@@ -74,8 +74,8 @@ void RaylibScene::Draw() {
     // Note: Render textures in raylib are y-flipped, so we need to adjust the source rectangle
     DrawTextureRec(
         m_renderTarget.texture,
-        (Rectangle){ 0, 0, (float)m_sceneWidth, -(float)m_sceneHeight },
-        (Vector2){ (float)m_sceneOriginX, (float)m_sceneOriginY },
+        Rectangle{ 0, 0, (float)m_sceneWidth, -(float)m_sceneHeight },
+        Vector2{ (float)m_sceneOriginX, (float)m_sceneOriginY },
         WHITE
     );
 }

@@ -13,8 +13,8 @@ const int targetFPS = 60;
 const char connectionMode = 'w';                // 'w' for websocket, 'u' for USB
 
 // Sensor frequencies
-constexpr int gyroFreq = 150;
-constexpr int accelFreq = 150;
+constexpr int gyroFreq = 100;
+constexpr int accelFreq = 100;
 constexpr int magFreq = 30;
 constexpr float gyroDeltaT = 1.0f / gyroFreq;
 constexpr float accelDeltaT = 1.0f / accelFreq;

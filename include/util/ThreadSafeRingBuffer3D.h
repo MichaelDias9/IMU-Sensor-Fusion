@@ -19,7 +19,7 @@ public:
             zBuffer[head] = z;
 
             head += 1;
-            count = std::min(count + 1, Capacity);
+            count = (count + 1 < Capacity) ? count + 1 : Capacity;
         } else {                          // Overflow - shift everything left by 1
             std::size_t elements_to_keep = Capacity - 1;
 
@@ -56,7 +56,7 @@ public:
             std::copy(zData, zData + len, zBuffer.begin() + head);
 
             head += len;
-            count = std::min(count + len, Capacity);
+            count = (count + len < Capacity) ? count + len : Capacity;
         } else {                            // Overflow
             std::size_t overflowing_count = head + len - 2 * Capacity;
             std::size_t elements_to_keep = Capacity - len;

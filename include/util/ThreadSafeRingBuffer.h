@@ -19,7 +19,7 @@ public:
         if (head + len <= 2 * Capacity) {   // No overflow
             std::copy(data, data + len, buffer.begin() + head);
             head += len;
-            count = std::min(count + len, Capacity);
+            count = (count + len < Capacity) ? count + len : Capacity;
         } else {                            // Overflow
             std::size_t overflowing_count = head + len - 2 * Capacity;
             std::size_t elements_to_keep = Capacity - len;
@@ -38,7 +38,7 @@ public:
         if (head + 1 <= 2 * Capacity) {   // No overflow
             buffer[head] = data;
             head += 1;
-            count = std::min(count + 1, Capacity);
+            count = (count + 1 < Capacity) ? count + 1 : Capacity;
         } else {                           // Overflow
             std::size_t elements_to_keep = Capacity - 1;
             std::copy(buffer.begin() + (head - elements_to_keep), 

@@ -146,7 +146,7 @@ void USBReceiver::processMessage(const std::string& msg) {
     }
 
     // Process sensor data in order accel, mag, gyro
-    size_t index = 3;
+    size_t index = 0;
     if (hasAccel) {
         // Update complementary filter
         complementaryFilter_.updateWithAccel(values[index], values[index+1], values[index+2]);
@@ -158,7 +158,7 @@ void USBReceiver::processMessage(const std::string& msg) {
     if (hasMag) {
         magDataBuffer_.append(values[index], values[index+1], values[index+2]);
         magTimesBuffer_.append(timeInSeconds);
-        index = 0;
+        index += 3;
         foundData = true;
     }
     if (hasGyro) {
