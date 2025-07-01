@@ -22,14 +22,12 @@ WebSocketSession::WebSocketSession(net::io_context& ioc, unsigned short port,
     run();
 }
 
-/*************  ✨ Windsurf Command ⭐  *************/
 /**
  * Start accepting incoming connections. This function will block until a
  * connection is accepted, then it will call handleConnection() to handle the
  * connection. If handleConnection() returns, this function will be called again
  * to continue listening for connections.
  */
-/*******  98f2ee6c-0a14-436b-813b-23273cd21ca8  *******/
 void WebSocketSession::run() {
     acceptor_.async_accept(
         [this](beast::error_code ec, tcp::socket socket) {
