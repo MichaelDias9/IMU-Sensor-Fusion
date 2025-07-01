@@ -15,11 +15,21 @@ WebSocketSession::WebSocketSession(net::io_context& ioc, unsigned short port,
     acceptor_(ioc, {tcp::v4(), port}),
     gyroDataBuffer_(gyroDataBuffer), accelDataBuffer_(accelDataBuffer), magDataBuffer_(magDataBuffer),
     gyroTimesBuffer_(gyroTimesBuffer), accelTimesBuffer_(accelTimesBuffer), magTimesBuffer_(magTimesBuffer),
-    complementaryFilter_(complementaryFilter) {
+    complementaryFilter_(complementaryFilter),
+    firstDataReceived_(false),
+    firstTimestamp_() {   // Initialize to default (zero time point)
     std::cout << "[Server] WebSocket server started on port " << port << std::endl;
     run();
 }
 
+/*************  ✨ Windsurf Command ⭐  *************/
+/**
+ * Start accepting incoming connections. This function will block until a
+ * connection is accepted, then it will call handleConnection() to handle the
+ * connection. If handleConnection() returns, this function will be called again
+ * to continue listening for connections.
+ */
+/*******  98f2ee6c-0a14-436b-813b-23273cd21ca8  *******/
 void WebSocketSession::run() {
     acceptor_.async_accept(
         [this](beast::error_code ec, tcp::socket socket) {
@@ -62,7 +72,7 @@ void WebSocketSession::readLoop() {
 
 void WebSocketSession::processMessage(size_t bytes) {
     std::string msg(static_cast<char*>(buffer_.data().data()), bytes);
-    std::cout << "[Server] Received message: " << msg << std::endl;
+    // std::cout << "[Server] Received message: " << msg << std::endl;
     
     // Current timestamp
     auto now = std::chrono::steady_clock::now();
@@ -76,7 +86,10 @@ void WebSocketSession::processMessage(size_t bytes) {
     
     // Calculate time in seconds since first data
     auto duration = now - firstTimestamp_;
-    float timeInSeconds = std::chrono::duration<float>(duration).count();
+    double timeInSeconds = std::chrono::duration<double>(duration).count();
+    
+    // Cast to float when storing (if your buffers require float)
+    float timeForBuffer = static_cast<float>(timeInSeconds);
 
     // Verify minimum message length (flags + space)
     if (msg.size() < 4 || msg[3] != ' ') {
@@ -116,19 +129,19 @@ void WebSocketSession::processMessage(size_t bytes) {
     if (hasMag) {
         complementaryFilter_.updateWithMag(values[index], values[index+1], values[index+2]);
         magDataBuffer_.append(values[index], values[index+1], values[index+2]);
-        magTimesBuffer_.append(timeInSeconds);
+        magTimesBuffer_.append(timeForBuffer);
         index += 3;
     }
     if (hasAccel) {
         complementaryFilter_.updateWithAccel(values[index], values[index+1], values[index+2]);
         accelDataBuffer_.append(values[index], values[index+1], values[index+2]);
-        accelTimesBuffer_.append(timeInSeconds);
+        accelTimesBuffer_.append(timeForBuffer);
         index += 3;
     }
     if (hasGyro) {
         complementaryFilter_.updateWithGyro(values[index], values[index+1], values[index+2]);
         gyroDataBuffer_.append(values[index], values[index+1], values[index+2]);
-        gyroTimesBuffer_.append(timeInSeconds);
+        gyroTimesBuffer_.append(timeForBuffer);
         index += 3;
     }
 }
