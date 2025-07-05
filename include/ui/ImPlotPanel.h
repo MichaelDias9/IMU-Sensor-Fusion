@@ -24,12 +24,12 @@ private:
 
 public:
     ImPlotPanel(int posX, int posY, int width, int height, 
-                const GyroBuffer& gyroBuffer_ref,
-                const AccelBuffer& accelBuffer_ref, 
-                const MagBuffer& magBuffer_ref,
-                const GyroTimesBuffer& gyroTimeBuffer_ref,
-                const AccelTimesBuffer& accelTimeBuffer_ref,
-                const MagTimesBuffer& magTimeBuffer_ref
+                const GyroBuffer& gyroBuffer,
+                const AccelBuffer& accelBuffer, 
+                const MagBuffer& magBuffer,
+                const GyroTimesBuffer& gyroTimeBuffer,
+                const AccelTimesBuffer& accelTimeBuffer,
+                const MagTimesBuffer& magTimeBuffer
                 );
 
     void Draw();

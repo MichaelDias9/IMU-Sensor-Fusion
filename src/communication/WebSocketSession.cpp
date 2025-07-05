@@ -1,6 +1,7 @@
 #include <iostream>
 #include <regex>
 #include <sstream>
+#include <iomanip>
 
 #include "communication/WebSocketSession.h"
 #include "Config.h"
@@ -15,9 +16,7 @@ WebSocketSession::WebSocketSession(net::io_context& ioc, unsigned short port,
     acceptor_(ioc, {tcp::v4(), port}),
     gyroDataBuffer_(gyroDataBuffer), accelDataBuffer_(accelDataBuffer), magDataBuffer_(magDataBuffer),
     gyroTimesBuffer_(gyroTimesBuffer), accelTimesBuffer_(accelTimesBuffer), magTimesBuffer_(magTimesBuffer),
-    complementaryFilter_(complementaryFilter),
-    firstDataReceived_(false),
-    firstTimestamp_() {   // Initialize to default (zero time point)
+    complementaryFilter_(complementaryFilter) {
     std::cout << "[Server] WebSocket server started on port " << port << std::endl;
     run();
 }
@@ -71,24 +70,6 @@ void WebSocketSession::readLoop() {
 void WebSocketSession::processMessage(size_t bytes) {
     std::string msg(static_cast<char*>(buffer_.data().data()), bytes);
     // std::cout << "[Server] Received message: " << msg << std::endl;
-    
-    // Current timestamp
-    auto now = std::chrono::steady_clock::now();
-    
-    // Set first timestamp if this is the first data
-    if (!firstDataReceived_) {
-        firstTimestamp_ = now;
-        firstDataReceived_ = true;
-        std::cout << "[Server] First data received - timestamp set" << std::endl;
-    }
-    
-    // Calculate time in seconds since first data
-    auto duration = now - firstTimestamp_;
-    double timeInSeconds = std::chrono::duration<double>(duration).count();
-    
-    // Cast to float when storing (if your buffers require float)
-    float timeForBuffer = static_cast<float>(timeInSeconds);
-
     // Verify minimum message length (flags + space)
     if (msg.size() < 4 || msg[3] != ' ') {
         std::cerr << "[Server] Invalid message format" << std::endl;
@@ -125,21 +106,27 @@ void WebSocketSession::processMessage(size_t bytes) {
     // Process sensor data 
     size_t index = 0;  
     if (hasMag) {
+        std::cout << std::setprecision(6) << "Mag: " << values[index] << ", " << values[index+1] << ", " << values[index+2] << std::endl;
         complementaryFilter_.updateWithMag(values[index], values[index+1], values[index+2]);
         magDataBuffer_.append(values[index], values[index+1], values[index+2]);
-        magTimesBuffer_.append(timeForBuffer);
+        magTimestamp_ += magDeltaT;
+        magTimesBuffer_.append(magTimestamp_);
         index += 3;
     }
     if (hasAccel) {
+        std::cout << std::setprecision(6) << "Accel: " << values[index] << ", " << values[index+1] << ", " << values[index+2] << std::endl;
         complementaryFilter_.updateWithAccel(values[index], values[index+1], values[index+2]);
         accelDataBuffer_.append(values[index], values[index+1], values[index+2]);
-        accelTimesBuffer_.append(timeForBuffer);
+        accelTimestamp_ += accelDeltaT;
+        accelTimesBuffer_.append(accelTimestamp_);
         index += 3;
     }
     if (hasGyro) {
+        std::cout << std::setprecision(6) << "Gyro: " << values[index] << ", " << values[index+1] << ", " << values[index+2] << std::endl;
         complementaryFilter_.updateWithGyro(values[index], values[index+1], values[index+2]);
         gyroDataBuffer_.append(values[index], values[index+1], values[index+2]);
-        gyroTimesBuffer_.append(timeForBuffer);
+        gyroTimestamp_ += gyroDeltaT;
+        gyroTimesBuffer_.append(gyroTimestamp_);
         index += 3;
     }
 }

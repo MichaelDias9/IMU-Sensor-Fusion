@@ -1,19 +1,20 @@
 #include "ui/ImPlotPanel.h"
 
-ImPlotPanel::ImPlotPanel(int posX, int posY, int width, int height, 
-                         const GyroBuffer& gyroDataBuffer_ref,
-                         const AccelBuffer& accelDataBuffer_ref, 
-                         const MagBuffer& magDataBuffer_ref,
-                         const GyroTimesBuffer& gyroTimeBuffer_ref,
-                         const AccelTimesBuffer& accelTimeBuffer_ref,
-                         const MagTimesBuffer& magTimeBuffer_ref
-                         )
+ImPlotPanel::ImPlotPanel(
+  int posX, int posY, int width, int height, 
+  const GyroBuffer& gyroDataBuffer,
+  const AccelBuffer& accelDataBuffer, 
+  const MagBuffer& magDataBuffer,
+  const GyroTimesBuffer& gyroTimeBuffer,
+  const AccelTimesBuffer& accelTimeBuffer,
+  const MagTimesBuffer& magTimeBuffer
+                        )
                         :
-                         m_posX(posX), m_posY(posY), m_width(width), m_height(height),
-                         m_vertical_zoom(1.0f), m_horizontal_zoom(1.0f),
-                         m_gyroPlot("Gyro", gyroDataBuffer_ref, gyroTimeBuffer_ref, -5.1f, 5.1f),
-                         m_accelPlot("Accel", accelDataBuffer_ref, accelTimeBuffer_ref, -2.1f, 1.1f),
-                         m_magPlot("Mag", magDataBuffer_ref, magTimeBuffer_ref, -90.0f, 90.0f) 
+  m_posX(posX), m_posY(posY), m_width(width), m_height(height),
+  m_vertical_zoom(1.0f), m_horizontal_zoom(1.0f),
+  m_gyroPlot("Gyro", gyroDataBuffer, gyroTimeBuffer, -5.1f, 5.1f),
+  m_accelPlot("Accel", accelDataBuffer, accelTimeBuffer, -2.1f, 1.1f),
+  m_magPlot("Mag", magDataBuffer, magTimeBuffer, -90.0f, 90.0f) 
 {}
 
 void ImPlotPanel::Draw() {

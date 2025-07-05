@@ -6,6 +6,9 @@
 #include "Config.h"
 #include "util/Structs3D.h"
 #include "communication/WebSocketSession.h"
+#ifdef _WIN32
+#include "communication/USBSession.h"
+#endif
 #include "ComplementaryFilter.h"
 #include "ui/RunApp.h"
 
@@ -74,12 +77,31 @@ int main() {
     // Create the complementary filter object for estimating the attitude
     ComplementaryFilter complementaryFilter(estimatedAttitude, accelVector);
 
-    // Start the web socket server on a separate thread
-    boost::asio::io_context ioc;
-    WebSocketSession server(ioc, 8000, gyroDataBuffer, accelDataBuffer, magDataBuffer, 
-                                      gyroTimesBuffer, accelTimesBuffer, magTimesBuffer, complementaryFilter);
-    server.run();
-    std::thread socketThread([&ioc]() { ioc.run(); });
+    // Start the comminucation session on a separate thread based on the selected mode
+    std::shared_ptr<void> sessionHolder;    // Create a shared_ptr to keep session alive
+    boost::asio::io_context ioc;            // IO context for the communication session
+     if (UseWebSocket) {
+        auto server = std::make_shared<WebSocketSession>(ioc, 8000, 
+            gyroDataBuffer, accelDataBuffer, magDataBuffer,
+            gyroTimesBuffer, accelTimesBuffer, magTimesBuffer, 
+            complementaryFilter);
+        server->run();
+        sessionHolder = server; // Keep alive
+    } else {
+        #ifdef _WIN32
+        const std::string portName = "COM9"; // Match your COM port
+        auto usb = std::make_shared<USBSession>(ioc, portName,
+            gyroDataBuffer, accelDataBuffer, magDataBuffer,
+            gyroTimesBuffer, accelTimesBuffer, magTimesBuffer,
+            complementaryFilter);
+        usb->run();
+        sessionHolder = usb; // Keep alive
+        #else
+        std::cerr << "USB mode not supported" << std::endl;
+        #endif
+    }
+
+    std::thread ioThread([&ioc]() { ioc.run(); });
 
     // Run App Window
     runApp(gyroDataBuffer, accelDataBuffer, magDataBuffer, gyroTimesBuffer, accelTimesBuffer, magTimesBuffer, 
@@ -87,5 +109,5 @@ int main() {
 
     // Clean up on exit
     ioc.stop();
-    socketThread.join();
+    ioThread.join();
 }

@@ -36,8 +36,9 @@ private:
     AccelTimesBuffer& accelTimesBuffer_;
     MagTimesBuffer& magTimesBuffer_;
 
+    float gyroTimestamp_ = 0.0f;
+    float accelTimestamp_ = 0.0f;
+    float magTimestamp_ = 0.0f;
+
     ComplementaryFilter& complementaryFilter_;
-  
-    std::chrono::steady_clock::time_point firstTimestamp_;
-    bool firstDataReceived_;
 };

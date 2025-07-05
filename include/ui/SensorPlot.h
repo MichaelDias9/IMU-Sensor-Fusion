@@ -42,6 +42,9 @@ public:
                 ImPlot::SetupAxisLimits(ImAxis_X1, x_min, x_max, ImGuiCond_Always);
                 ImPlot::SetupAxisLimits(ImAxis_Y1, m_y_min, m_y_max, ImGuiCond_Once);
 
+                // Set x-axis labels format
+                ImPlot::SetupAxisFormat(ImAxis_X1, "%.0f");
+
                 // Handle Y-axis zoom 
                 if (ImPlot::IsPlotHovered() && !ImGui::GetIO().KeyCtrl && !ImGui::GetIO().KeyShift) {
                     float wheel = ImGui::GetIO().MouseWheel;

@@ -9,9 +9,12 @@ const int screenWidth = 1280;
 const int screenHeight = 800;
 const int targetFPS = 60;
 
+// Communication mode
+const bool UseWebSocket = false;
+
 // Sensor frequencies
-constexpr int gyroFreq = 150;
-constexpr int accelFreq = 150;
+constexpr int gyroFreq = 200;
+constexpr int accelFreq = 200;
 constexpr int magFreq = 30;
 constexpr float gyroDeltaT = 1.0f / gyroFreq;
 constexpr float accelDeltaT = 1.0f / accelFreq;
@@ -25,7 +28,7 @@ const float KiYaw = 0.05f;
 
 // Plot settings
 static constexpr size_t MAX_PLOT_POINTS = 1000; // ImPlot downsampling threshold
-constexpr int bufferSeconds = 5;                // Length of data history to keep
+constexpr int bufferSeconds = 4;                // Length of data history to keep
 
 // Set buffer sizes for aliases based on sensor frequencies and data history length
 constexpr std::size_t gyroBufferSize = gyroFreq * bufferSeconds;
