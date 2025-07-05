@@ -14,6 +14,8 @@ A C++ project for visualizing and fusing real time gyroscope, accelerometer, and
 ## Demo 
 ![Demo](media/demo.gif?raw=true)
 
+Note: For this example I only used accelerometer and gyroscope as the magnetometer is optional
+
 ## Usage
   * Uses CMake build generator. To build, run the following commands from the project root directory:
     * cmake -S . -B build
