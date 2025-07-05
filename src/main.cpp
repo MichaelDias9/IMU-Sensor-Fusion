@@ -6,12 +6,22 @@
 #include "Config.h"
 #include "util/Structs3D.h"
 #include "communication/WebSocketSession.h"
-#ifdef _WIN32
 #include "communication/USBSession.h"
-#endif
 #include "ComplementaryFilter.h"
 #include "ui/RunApp.h"
 
+// Function to get the appropriate serial port name for each platform
+std::string getDefaultSerialPort() {
+#ifdef _WIN32
+    return "COM9";  // Windows COM port
+#elif defined(__APPLE__)
+    return "/dev/tty.usbserial-0001";  // macOS USB serial port (adjust as needed)
+#elif defined(__linux__)
+    return "/dev/ttyUSB0";  // Linux USB serial port
+#else
+    return "";
+#endif
+}
 
 // Function to pre-fill the buffers with empty data
 void prefillBuffers(GyroBuffer& gyroDataBuffer, AccelBuffer& accelDataBuffer, MagBuffer& magDataBuffer, 
@@ -77,10 +87,11 @@ int main() {
     // Create the complementary filter object for estimating the attitude
     ComplementaryFilter complementaryFilter(estimatedAttitude, accelVector);
 
-    // Start the comminucation session on a separate thread based on the selected mode
+    // Start the communication session on a separate thread based on the selected mode
     std::shared_ptr<void> sessionHolder;    // Create a shared_ptr to keep session alive
     boost::asio::io_context ioc;            // IO context for the communication session
-     if (UseWebSocket) {
+    
+    if (UseWebSocket) {
         auto server = std::make_shared<WebSocketSession>(ioc, 8000, 
             gyroDataBuffer, accelDataBuffer, magDataBuffer,
             gyroTimesBuffer, accelTimesBuffer, magTimesBuffer, 
@@ -88,17 +99,22 @@ int main() {
         server->run();
         sessionHolder = server; // Keep alive
     } else {
-        #ifdef _WIN32
-        const std::string portName = "COM9"; // Match your COM port
+        // USB mode - now supported on all platforms
+        std::string portName = getDefaultSerialPort();
+        if (portName.empty()) {
+            std::cerr << "USB mode not supported on this platform" << std::endl;
+            return 1;
+        }
+        
+        std::cout << "Using serial port: " << portName << std::endl;
+        std::cout << "Note: You may need to adjust the port name in getDefaultSerialPort() for your specific device" << std::endl;
+        
         auto usb = std::make_shared<USBSession>(ioc, portName,
             gyroDataBuffer, accelDataBuffer, magDataBuffer,
             gyroTimesBuffer, accelTimesBuffer, magTimesBuffer,
             complementaryFilter);
         usb->run();
         sessionHolder = usb; // Keep alive
-        #else
-        std::cerr << "USB mode not supported" << std::endl;
-        #endif
     }
 
     std::thread ioThread([&ioc]() { ioc.run(); });
@@ -110,4 +126,6 @@ int main() {
     // Clean up on exit
     ioc.stop();
     ioThread.join();
+    
+    return 0;
 }

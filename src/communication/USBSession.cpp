@@ -1,12 +1,7 @@
-#define WIN32_LEAN_AND_MEAN
-
 #include "communication/USBSession.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
-
-// Windows headers LAST
-#include <Windows.h>  // Keep this AFTER other includes
 
 USBSession::USBSession(asio::io_context& ioc, const std::string& portName, 
         GyroBuffer& gyroDataBuffer, AccelBuffer& accelDataBuffer, MagBuffer& magDataBuffer,
@@ -29,53 +24,26 @@ USBSession::USBSession(asio::io_context& ioc, const std::string& portName,
         return;
     }
     
-    // First set standard options
+    // Set standard options
+    serial_port_.set_option(asio::serial_port_base::baud_rate(115200));
     serial_port_.set_option(asio::serial_port_base::character_size(8));
     serial_port_.set_option(asio::serial_port_base::stop_bits(asio::serial_port_base::stop_bits::one));
     serial_port_.set_option(asio::serial_port_base::parity(asio::serial_port_base::parity::none));
     serial_port_.set_option(asio::serial_port_base::flow_control(asio::serial_port_base::flow_control::none));
     
-    // Set custom baud rate using Windows API
-    HANDLE hCom = serial_port_.native_handle();
-    DCB dcb = {0};
-    dcb.DCBlength = sizeof(DCB);
-    
-    if (!GetCommState(hCom, &dcb)) {
-        std::cerr << "[USB] GetCommState failed: " << GetLastError() << std::endl;
-        return;
-    }
-    
-    dcb.BaudRate = 921600;  // Custom baud rate
-    dcb.ByteSize = 8;
-    dcb.StopBits = ONESTOPBIT;
-    dcb.Parity = NOPARITY;
-    
-    if (!SetCommState(hCom, &dcb)) {
-        std::cerr << "[USB] SetCommState failed: " << GetLastError() << std::endl;
-        return;
-    }
-    
-    // Verify baud rate was set
-    if (!GetCommState(hCom, &dcb)) {
-        std::cerr << "[USB] Verify CommState failed: " << GetLastError() << std::endl;
-    } else {
-        std::cout << "[USB] Actual baud rate: " << dcb.BaudRate << std::endl;
-    }
-    
-    std::cout << "[USB] Serial port opened at 921600 baud: " << portName << std::endl;
-  }
-
+    std::cout << "[USB] Serial port opened at 115200 baud: " << portName << std::endl;
+}
 
 USBSession::~USBSession() {
-        if (serial_port_.is_open()) {
-            boost::system::error_code ec;
-            serial_port_.close(ec);
-            if (ec) {
-                std::cerr << "[USB] Error closing port: " 
-                          << ec.message() << std::endl;
-            }
+    if (serial_port_.is_open()) {
+        boost::system::error_code ec;
+        serial_port_.close(ec);
+        if (ec) {
+            std::cerr << "[USB] Error closing port: " 
+                      << ec.message() << std::endl;
         }
     }
+}
 
 void USBSession::run() {
     if (serial_port_.is_open()) {
@@ -109,10 +77,6 @@ void USBSession::processLine(const std::string& line) {
         std::cerr << "[USB] Invalid message format: " << line << std::endl;
         return;
     }
-
-    // Print received message and timestamp
-    //std::cout << "[USB] Time: " << std::fixed << std::setprecision(6) << timeInSeconds << "s" << std::endl;
-    //std::cout << "[USB] Received message: " << line << std::endl;
 
     // Parse sensor flags
     bool hasMag = (line[0] == '1');

@@ -5,6 +5,17 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# --- Platform-specific configuration --- #
+if(APPLE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum macOS deployment version")
+    # Find frameworks needed for serial communication on macOS
+    find_library(IOKIT_FRAMEWORK IOKit)
+    find_library(COREFOUNDATION_FRAMEWORK CoreFoundation)
+    if(NOT IOKIT_FRAMEWORK OR NOT COREFOUNDATION_FRAMEWORK)
+        message(FATAL_ERROR "IOKit or CoreFoundation framework not found")
+    endif()
+endif()
+
 # --- Find boost --- #
 if (WIN32)
     set(Boost_NO_BOOST_CMAKE ON)
@@ -15,8 +26,22 @@ if (WIN32)
     cmake_policy(SET CMP0144 OLD)   # Use old-style _ROOT variables
 else()
     cmake_policy(SET CMP0167 NEW)   # Suppress warning, use modern behavior
+    # On macOS/Linux, try to find Boost using pkg-config or system paths
+    if(APPLE)
+        # Common Homebrew installation paths
+        set(BOOST_ROOT "/opt/homebrew" "/usr/local")
+        set(Boost_NO_BOOST_CMAKE ON)
+    endif()
 endif()
-find_package(Boost 1.87.0 REQUIRED COMPONENTS system thread)
+
+find_package(Boost 1.70.0 REQUIRED COMPONENTS system thread)
+if(Boost_FOUND)
+    message(STATUS "Boost found: ${Boost_VERSION}")
+    message(STATUS "Boost include dir: ${Boost_INCLUDE_DIRS}")
+    message(STATUS "Boost libraries: ${Boost_LIBRARIES}")
+else()
+    message(FATAL_ERROR "Boost not found. Please install Boost development libraries.")
+endif()
 
 # --- Raylib --- # 
 include(FetchContent)
@@ -59,12 +84,31 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${Boost_INCLUDE_DIRS}
 )
 
+# --- Link libraries --- #
 target_link_libraries(${PROJECT_NAME} PRIVATE 
     Boost::system
     Boost::thread
     rlImGui # Links raylib transitively
     implot  # Links imgui transitively
 )
+
+# Platform-specific linking
+if(APPLE)
+    target_link_libraries(${PROJECT_NAME} PRIVATE 
+        ${IOKIT_FRAMEWORK}
+        ${COREFOUNDATION_FRAMEWORK}
+    )
+elseif(UNIX AND NOT APPLE)
+    # Linux - might need additional libraries for serial communication
+    target_link_libraries(${PROJECT_NAME} PRIVATE pthread)
+endif()
+
+# --- Compiler-specific options --- #
+if(APPLE)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE __APPLE__)
+elseif(UNIX)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE __linux__)
+endif()
 
 # --- Resources --- #
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
