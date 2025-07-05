@@ -11,6 +11,8 @@ A C++ project for visualizing and fusing real time gyroscope, accelerometer, and
   * Adjust plot sizes and zoom levels in both axes at run-time.  
   * Leverages downsampling to plot a large history of sensor data simultaneously (play with bufferSeconds and MAX_PLOT_POINTS).
 
+![Demo](media/sensor-fusion-demo.gif)
+
 ## Usage
   * Uses CMake build generator. To build, run the following commands from the project root directory:
     * cmake -S . -B build
