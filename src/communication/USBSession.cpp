@@ -2,6 +2,8 @@
 #include "ComplementaryFilter.h"
 #include <iostream>
 #include <cstring>
+#include <vector>
+#include <algorithm>
 
 USBSession::USBSession(boost::asio::io_context& ioc, const std::string& portName, 
         GyroBuffer& gyroDataBuffer, AccelBuffer& accelDataBuffer, MagBuffer& magDataBuffer,
@@ -33,8 +35,9 @@ USBSession::USBSession(boost::asio::io_context& ioc, const std::string& portName
     serial_port_.set_option(boost::asio::serial_port_base::parity(boost::asio::serial_port_base::parity::none));
     serial_port_.set_option(boost::asio::serial_port_base::flow_control(boost::asio::serial_port_base::flow_control::none));
     
-    // Initialize binary buffer
-    binary_buffer_.resize(sizeof(SensorPacket));
+    // Initialize state and binary buffer
+    read_state_ = ReadState::SYNC;
+    binary_buffer_.resize(200);
     
     std::cout << "[USB] Serial port opened at 115200 baud: " << portName << std::endl;
 }
@@ -51,113 +54,240 @@ USBSession::~USBSession() {
 
 void USBSession::run() {
     if (serial_port_.is_open()) {
-        readBinaryHeader();
+        startReading();
     }
 }
 
-void USBSession::readBinaryHeader() {
-    reading_header_ = true;
-    bytes_needed_ = 2; // flags + count
-    
+void USBSession::startReading() {
+    switch (read_state_) {
+        case ReadState::SYNC:
+            readSyncByte();
+            break;
+        case ReadState::HEADER:
+            readPacketHeader();
+            break;
+        case ReadState::DATA:
+            readPacketData();
+            break;
+    }
+}
+
+void USBSession::readSyncByte() {
+    auto self(shared_from_this());
     boost::asio::async_read(serial_port_, 
-        boost::asio::buffer(binary_buffer_.data(), bytes_needed_),
-        [this](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+        boost::asio::buffer(binary_buffer_.data(), 1),
+        [this, self](const boost::system::error_code& ec, std::size_t bytes_transferred) {
             if (ec) {
-                if (ec != boost::asio::error::operation_aborted) {
-                    std::cerr << "[USB] Header read error: " << ec.message() << std::endl;
+                std::cerr << "[USB] Sync read error: " << ec.message() << std::endl;
+                return;
+            }
+            
+            if (binary_buffer_[0] == SYNC_BYTE) {
+                read_state_ = ReadState::HEADER;
+                readPacketHeader();
+            } else {
+                // Not sync byte, keep searching
+                readSyncByte();
+            }
+        });
+}
+
+void USBSession::processBatch(const BatchHeader& header, const float* data) {
+    if (!data && (header.gyro_samples > 0 || header.accel_samples > 0 || header.mag_samples > 0)) {
+        std::cerr << "[USB] Warning: No data to process but samples indicated" << std::endl;
+        return;
+    }
+    
+    // Debug output
+    std::cout << "[USB] Processing batch: gyro=" << (int)header.gyro_samples 
+              << ", accel=" << (int)header.accel_samples 
+              << ", mag=" << (int)header.mag_samples 
+              << ", seq=" << header.sequence << std::endl;
+    
+    // Parse data from the buffer (order: mag -> accel -> gyro)
+    const float* data_ptr = data;
+    
+    // Extract mag data (now supports multiple samples)
+    struct MagSample {
+        float x, y, z;
+        float timestamp;
+    };
+    std::vector<MagSample> magSamples;
+    
+    for (int i = 0; i < header.mag_samples; i++) {
+        magSamples.push_back({data_ptr[0], data_ptr[1], data_ptr[2], magTimestamp_});
+        magTimestamp_ += magDeltaT;
+        data_ptr += 3;
+    }
+    
+    // Extract accel data
+    struct AccelSample {
+        float x, y, z;
+        float timestamp;
+    };
+    std::vector<AccelSample> accelSamples;
+    
+    for (int i = 0; i < header.accel_samples; i++) {
+        accelSamples.push_back({data_ptr[0], data_ptr[1], data_ptr[2], accelTimestamp_});
+        accelTimestamp_ += accelDeltaT;
+        data_ptr += 3;
+    }
+    
+    // Extract gyro data
+    struct GyroSample {
+        float x, y, z;
+        float timestamp;
+    };
+    std::vector<GyroSample> gyroSamples;
+    
+    for (int i = 0; i < header.gyro_samples; i++) {
+        gyroSamples.push_back({data_ptr[0], data_ptr[1], data_ptr[2], gyroTimestamp_});
+        gyroTimestamp_ += gyroDeltaT;
+        data_ptr += 3;
+    }
+    
+    // Create a combined sorted list of all samples by timestamp
+    struct SensorSample {
+        enum Type { MAG, ACCEL, GYRO } type;
+        float x, y, z;
+        float timestamp;
+        int index; // Index within the specific sensor type
+    };
+    
+    std::vector<SensorSample> allSamples;
+    
+    // Add all samples to the combined list
+    for (size_t i = 0; i < magSamples.size(); i++) {
+        allSamples.push_back({SensorSample::MAG, magSamples[i].x, magSamples[i].y, magSamples[i].z, magSamples[i].timestamp, (int)i});
+    }
+    for (size_t i = 0; i < accelSamples.size(); i++) {
+        allSamples.push_back({SensorSample::ACCEL, accelSamples[i].x, accelSamples[i].y, accelSamples[i].z, accelSamples[i].timestamp, (int)i});
+    }
+    for (size_t i = 0; i < gyroSamples.size(); i++) {
+        allSamples.push_back({SensorSample::GYRO, gyroSamples[i].x, gyroSamples[i].y, gyroSamples[i].z, gyroSamples[i].timestamp, (int)i});
+    }
+    
+    // Sort by timestamp to restore temporal order
+    std::sort(allSamples.begin(), allSamples.end(), 
+              [](const SensorSample& a, const SensorSample& b) {
+                  return a.timestamp < b.timestamp;
+              });
+    
+    // Process samples in temporal order for proper filtering
+    for (const auto& sample : allSamples) {
+        switch (sample.type) {
+            case SensorSample::MAG:
+                magDataBuffer_.append(sample.x, sample.y, sample.z);
+                magTimesBuffer_.append(sample.timestamp);
+                complementaryFilter_.updateWithMag(sample.x, sample.y, sample.z);
+                if (sample.index == 0) { // Only print first sample to avoid spam
+                    std::cout << "[USB] Mag: " << sample.x << ", " << sample.y << ", " << sample.z << std::endl;
                 }
+                break;
+                
+            case SensorSample::ACCEL:
+                accelDataBuffer_.append(sample.x, sample.y, sample.z);
+                accelTimesBuffer_.append(sample.timestamp);
+                complementaryFilter_.updateWithAccel(sample.x, sample.y, sample.z);
+                if (sample.index == 0) { // Only print first sample to avoid spam
+                    std::cout << "[USB] Accel: " << sample.x << ", " << sample.y << ", " << sample.z << std::endl;
+                }
+                break;
+                
+            case SensorSample::GYRO:
+                gyroDataBuffer_.append(sample.x, sample.y, sample.z);
+                gyroTimesBuffer_.append(sample.timestamp);
+                complementaryFilter_.updateWithGyro(sample.x, sample.y, sample.z);
+                if (sample.index == 0) { // Only print first sample to avoid spam
+                    std::cout << "[USB] Gyro: " << sample.x << ", " << sample.y << ", " << sample.z << std::endl;
+                }
+                break;
+        }
+    }
+}
+
+void USBSession::readPacketHeader() {
+    auto self(shared_from_this());
+    // Read fixed-size header (6 bytes after sync)
+    boost::asio::async_read(serial_port_, 
+        boost::asio::buffer(binary_buffer_.data(), 6),
+        [this, self](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+            if (ec) {
+                std::cerr << "[USB] Header read error: " << ec.message() << std::endl;
+                read_state_ = ReadState::SYNC;
+                startReading();
                 return;
             }
             
             // Parse header
-            uint8_t flags = binary_buffer_[0];
-            uint8_t count = binary_buffer_[1];
+            uint8_t packet_type = binary_buffer_[0];
+            uint16_t sequence = (static_cast<uint16_t>(binary_buffer_[1]) << 8) | binary_buffer_[2];
+            uint8_t gyro_samples = binary_buffer_[3];
+            uint8_t accel_samples = binary_buffer_[4];
+            uint8_t mag_samples = binary_buffer_[5];
             
-            // Validate count
-            if (count > 6) {
-                std::cerr << "[USB] Invalid data count: " << (int)count << std::endl;
-                readBinaryHeader(); // Try again
+            // Updated validation to allow multiple mag samples
+            if (packet_type != 0x01 || gyro_samples > 7 || accel_samples > 7 || mag_samples > 7) {
+                std::cerr << "[USB] Invalid header: type=" << (int)packet_type 
+                          << ", gyro=" << (int)gyro_samples 
+                          << ", accel=" << (int)accel_samples 
+                          << ", mag=" << (int)mag_samples << ". Resyncing..." << std::endl;
+                read_state_ = ReadState::SYNC;
+                startReading();
                 return;
             }
             
-            // Store header in buffer
-            binary_buffer_[0] = flags;
-            binary_buffer_[1] = count;
+            // Store header info for data reading
+            current_header_ = {
+                .packet_type = packet_type,
+                .sequence = sequence,
+                .gyro_samples = gyro_samples,
+                .accel_samples = accel_samples,
+                .mag_samples = mag_samples
+            };
             
-            // Calculate bytes needed for data
-            bytes_needed_ = count * sizeof(float);
+            // Calculate data size: (gyro + accel + mag) * 3 floats each * 4 bytes per float
+            bytes_needed_ = (gyro_samples * 3 + accel_samples * 3 + mag_samples * 3) * sizeof(float);
             
             if (bytes_needed_ > 0) {
-                readBinaryData();
+                read_state_ = ReadState::DATA;
+                readPacketData();
             } else {
-                readBinaryHeader(); // No data, read next header
+                // No data, process empty packet
+                processBatch(current_header_, nullptr);
+                read_state_ = ReadState::SYNC;
+                startReading();
             }
         });
 }
 
-void USBSession::readBinaryData() {
-    reading_header_ = false;
-    
-    // Read float data into buffer after header
+void USBSession::readPacketData() {
+    auto self(shared_from_this());
     boost::asio::async_read(serial_port_, 
-        boost::asio::buffer(binary_buffer_.data() + 2, bytes_needed_),
-        [this](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+        boost::asio::buffer(binary_buffer_.data(), bytes_needed_),
+        [this, self](const boost::system::error_code& ec, std::size_t bytes_transferred) {
             if (ec) {
-                if (ec != boost::asio::error::operation_aborted) {
-                    std::cerr << "[USB] Data read error: " << ec.message() << std::endl;
-                }
+                std::cerr << "[USB] Data read error: " << ec.message() << std::endl;
+                read_state_ = ReadState::SYNC;
+                startReading();
                 return;
             }
             
-            // Process complete packet
-            const SensorPacket* packet = reinterpret_cast<const SensorPacket*>(binary_buffer_.data());
-            processBinaryPacket(*packet);
+            // Verify we got the expected number of bytes
+            if (bytes_transferred != bytes_needed_) {
+                std::cerr << "[USB] Data size mismatch: expected " << bytes_needed_ 
+                          << ", got " << bytes_transferred << std::endl;
+                read_state_ = ReadState::SYNC;
+                startReading();
+                return;
+            }
             
-            // Read next packet
-            readBinaryHeader();
+            // Process the received data
+            const float* float_data = reinterpret_cast<const float*>(binary_buffer_.data());
+            processBatch(current_header_, float_data);
+            
+            // Return to sync state
+            read_state_ = ReadState::SYNC;
+            startReading();
         });
-}
-
-void USBSession::processBinaryPacket(const SensorPacket& packet) {
-    // Parse sensor flags - bit positions: 0=mag, 1=accel, 2=gyro
-    bool hasMag = (packet.flags & 0x01) != 0;    // bit 0
-    bool hasAccel = (packet.flags & 0x02) != 0;  // bit 1  
-    bool hasGyro = (packet.flags & 0x04) != 0;   // bit 2
-    
-    /* Debug output
-    std::cout << "[USB] Flags: 0x" << std::hex << (int)packet.flags << std::dec 
-              << " (mag=" << hasMag << ", accel=" << hasAccel << ", gyro=" << hasGyro 
-              << "), count=" << (int)packet.count << std::endl;
-    */
-    // Validate expected count
-    size_t expectedCount = (hasGyro ? 3 : 0) + (hasAccel ? 3 : 0) + (hasMag ? 3 : 0);
-    if (packet.count != expectedCount) {
-        std::cerr << "[USB] Data count mismatch. Expected " 
-                  << expectedCount << " values, got " << (int)packet.count << std::endl;
-        return;
-    }
-    
-    // Process data in order: mag, accel, gyro
-    size_t index = 0;
-    if (hasMag) {
-        complementaryFilter_.updateWithMag(packet.data[index], packet.data[index+1], packet.data[index+2]);
-        magDataBuffer_.append(packet.data[index], packet.data[index+1], packet.data[index+2]);
-        magTimestamp_ += magDeltaT;
-        magTimesBuffer_.append(magTimestamp_);
-        index += 3;
-    }
-    if (hasAccel) {
-        complementaryFilter_.updateWithAccel(packet.data[index], packet.data[index+1], packet.data[index+2]);
-        accelDataBuffer_.append(packet.data[index], packet.data[index+1], packet.data[index+2]);
-        accelTimestamp_ += accelDeltaT;
-        accelTimesBuffer_.append(accelTimestamp_);
-        index += 3;
-    }
-    if (hasGyro) {
-        complementaryFilter_.updateWithGyro(packet.data[index], packet.data[index+1], packet.data[index+2]);
-        gyroDataBuffer_.append(packet.data[index], packet.data[index+1], packet.data[index+2]);
-        gyroTimestamp_ += gyroDeltaT;
-        gyroTimesBuffer_.append(gyroTimestamp_);
-        index += 3;
-    }
 }

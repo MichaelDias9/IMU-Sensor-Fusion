@@ -9,7 +9,63 @@ using namespace Structs3D;
 
 ComplementaryFilter::ComplementaryFilter(QuaternionF& attitude, Vector3F& magVector) : attitude_(attitude), magVector_(magVector) {}
 
+bool ComplementaryFilter::isValidGyroReading(float gyroX, float gyroY, float gyroZ) const {
+    // Check for NaN or infinity
+    if (!std::isfinite(gyroX) || !std::isfinite(gyroY) || !std::isfinite(gyroZ)) {
+        return false;
+    }
+    
+    // Check for extremely large values
+    if (std::abs(gyroX) > MAX_GYRO_RATE || 
+        std::abs(gyroY) > MAX_GYRO_RATE || 
+        std::abs(gyroZ) > MAX_GYRO_RATE) {
+        return false;
+    }
+    
+    return true;
+}
+
+bool ComplementaryFilter::isValidAccelReading(float accelX, float accelY, float accelZ) const {
+    // Check for NaN or infinity
+    if (!std::isfinite(accelX) || !std::isfinite(accelY) || !std::isfinite(accelZ)) {
+        return false;
+    }
+    
+    // Calculate magnitude
+    float magnitude = std::sqrt(accelX * accelX + accelY * accelY + accelZ * accelZ);
+    
+    // Check for reasonable magnitude (should be around 9.8 m/s^2 for gravity)
+    if (magnitude < MIN_ACCEL_MAGNITUDE || magnitude > MAX_ACCEL_MAGNITUDE) {
+        return false;
+    }
+    
+    return true;
+}
+
+bool ComplementaryFilter::isValidMagReading(float magX, float magY, float magZ) const {
+    // Check for NaN or infinity
+    if (!std::isfinite(magX) || !std::isfinite(magY) || !std::isfinite(magZ)) {
+        return false;
+    }
+    
+    // Calculate magnitude
+    float magnitude = std::sqrt(magX * magX + magY * magY + magZ * magZ);
+    
+    // Check for reasonable magnitude (Earth's magnetic field is ~25-65 μT)
+    if (magnitude < MIN_MAG_MAGNITUDE || magnitude > MAX_MAG_MAGNITUDE) {
+        return false;
+    }
+    
+    return true;
+}
+
 void ComplementaryFilter::updateWithGyro(float gyroX, float gyroY, float gyroZ){    
+    // Sanity check gyro values
+    if (!isValidGyroReading(gyroX, gyroY, gyroZ)) {
+        std::cout << "Warning: Invalid gyro reading detected, skipping update" << std::endl;
+        return;
+    }
+
     // Correct with proportional terms and reset. Accel and mag updates will set P terms again
     if (PTermRoll_ != 0.0f && PTermPitch_ != 0.0f) {   
         gyroX += PTermRoll_;
@@ -38,6 +94,12 @@ void ComplementaryFilter::updateWithGyro(float gyroX, float gyroY, float gyroZ){
 }
 
 void ComplementaryFilter::updateWithAccel(float accelX, float accelY, float accelZ){
+    // Sanity check accel values
+    if (!isValidAccelReading(accelX, accelY, accelZ)) {
+        std::cout << "Warning: Invalid accel reading detected, skipping update" << std::endl;
+        return;
+    }
+
     // Normalize the accel vector 
     Vector3F accelVector = normalizeVector(Vector3F(accelX, accelY, accelZ));
 
@@ -56,6 +118,12 @@ void ComplementaryFilter::updateWithAccel(float accelX, float accelY, float acce
 }
 
 void ComplementaryFilter::updateWithMag(float magX, float magY, float magZ){
+    // Sanity check mag values
+    if (!isValidMagReading(magX, magY, magZ)) {
+        std::cout << "Warning: Invalid mag reading detected, skipping update" << std::endl;
+        return;
+    }
+
     // Normalize the mag vector
     Vector3F magVector = normalizeVector(Vector3F(magX, magY, magZ));   
 

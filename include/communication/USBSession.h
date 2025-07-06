@@ -6,6 +6,7 @@
 #include <memory>
 #include <vector>
 
+#define SYNC_BYTE 0xAA
 
 class ComplementaryFilter;
 
@@ -14,15 +15,24 @@ private:
     boost::asio::serial_port serial_port_;
     boost::asio::streambuf input_buffer_;
     
-    // Binary protocol structure
-    struct SensorPacket {
-        uint8_t flags;
-        uint8_t count;
-        float data[6];
-    } __attribute__((packed));
+    struct BatchHeader {
+        uint8_t packet_type;
+        uint16_t sequence;
+        uint8_t gyro_samples;
+        uint8_t accel_samples;
+        uint8_t mag_samples;
+    };
     
+    enum class ReadState {
+        SYNC,
+        HEADER,
+        DATA
+    };
+    ReadState read_state_;
+    BatchHeader current_header_ = {0, 0, 0, 0, 0};
+
     // Buffer for binary reading
-    std::vector<uint8_t> binary_buffer_;
+    std::vector<uint8_t> binary_buffer_ = std::vector<uint8_t>(200);
     size_t bytes_needed_;
     bool reading_header_;
     
@@ -39,13 +49,12 @@ private:
     float magTimestamp_ = 0.0f;
     float accelTimestamp_ = 0.0f;
     float gyroTimestamp_ = 0.0f;
-    const float magDeltaT = 1.0f / 100.0f;    // 100 Hz
-    const float accelDeltaT = 1.0f / 200.0f;  // 200 Hz
-    const float gyroDeltaT = 1.0f / 200.0f;   // 200 Hz
 
-    void readBinaryHeader();
-    void readBinaryData();
-    void processBinaryPacket(const SensorPacket& packet);
+    void startReading();
+    void readPacketHeader();
+    void processBatch(const BatchHeader& header, const float* data);
+    void readPacketData();
+    void readSyncByte();
 
 public:
     USBSession(boost::asio::io_context& ioc, const std::string& portName, 
