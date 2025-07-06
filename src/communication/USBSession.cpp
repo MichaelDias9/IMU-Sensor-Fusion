@@ -208,9 +208,9 @@ void USBSession::processBatch(const BatchHeader& header, const float* data) {
 
 void USBSession::readPacketHeader() {
     auto self(shared_from_this());
-    // Read fixed-size header (6 bytes after sync)
+    // Read fixed-size header (5 bytes after sync) - removed packet_type
     boost::asio::async_read(serial_port_, 
-        boost::asio::buffer(binary_buffer_.data(), 6),
+        boost::asio::buffer(binary_buffer_.data(), 5),
         [this, self](const boost::system::error_code& ec, std::size_t bytes_transferred) {
             if (ec) {
                 std::cerr << "[USB] Header read error: " << ec.message() << std::endl;
@@ -219,17 +219,15 @@ void USBSession::readPacketHeader() {
                 return;
             }
             
-            // Parse header
-            uint8_t packet_type = binary_buffer_[0];
-            uint16_t sequence = (static_cast<uint16_t>(binary_buffer_[1]) << 8) | binary_buffer_[2];
-            uint8_t gyro_samples = binary_buffer_[3];
-            uint8_t accel_samples = binary_buffer_[4];
-            uint8_t mag_samples = binary_buffer_[5];
+            // Parse header (no packet_type)
+            uint16_t sequence = (static_cast<uint16_t>(binary_buffer_[0]) << 8) | binary_buffer_[1];
+            uint8_t gyro_samples = binary_buffer_[2];
+            uint8_t accel_samples = binary_buffer_[3];
+            uint8_t mag_samples = binary_buffer_[4];
             
-            // Updated validation to allow multiple mag samples
-            if (packet_type != 0x01 || gyro_samples > 7 || accel_samples > 7 || mag_samples > 7) {
-                std::cerr << "[USB] Invalid header: type=" << (int)packet_type 
-                          << ", gyro=" << (int)gyro_samples 
+            // Simplified validation (removed packet_type check)
+            if (gyro_samples > 7 || accel_samples > 7 || mag_samples > 7) {
+                std::cerr << "[USB] Invalid header: gyro=" << (int)gyro_samples 
                           << ", accel=" << (int)accel_samples 
                           << ", mag=" << (int)mag_samples << ". Resyncing..." << std::endl;
                 read_state_ = ReadState::SYNC;
@@ -239,7 +237,6 @@ void USBSession::readPacketHeader() {
             
             // Store header info for data reading
             current_header_ = {
-                .packet_type = packet_type,
                 .sequence = sequence,
                 .gyro_samples = gyro_samples,
                 .accel_samples = accel_samples,

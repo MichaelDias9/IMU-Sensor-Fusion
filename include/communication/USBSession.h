@@ -16,7 +16,6 @@ private:
     boost::asio::streambuf input_buffer_;
     
     struct BatchHeader {
-        uint8_t packet_type;
         uint16_t sequence;
         uint8_t gyro_samples;
         uint8_t accel_samples;
@@ -29,7 +28,7 @@ private:
         DATA
     };
     ReadState read_state_;
-    BatchHeader current_header_ = {0, 0, 0, 0, 0};
+    BatchHeader current_header_ = {0, 0, 0, 0};
 
     // Buffer for binary reading
     std::vector<uint8_t> binary_buffer_ = std::vector<uint8_t>(200);

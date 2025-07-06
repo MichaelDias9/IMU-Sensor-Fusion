@@ -15,7 +15,7 @@ const bool UseWebSocket = false;
 // Sensor frequencies
 constexpr int gyroFreq = 200;
 constexpr int accelFreq = 200;
-constexpr int magFreq = 30;
+constexpr int magFreq = 50;
 constexpr float gyroDeltaT = 1.0f / gyroFreq;
 constexpr float accelDeltaT = 1.0f / accelFreq;
 constexpr float magDeltaT = 1.0f / magFreq;
