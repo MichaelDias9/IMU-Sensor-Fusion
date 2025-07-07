@@ -57,9 +57,9 @@ Example:
     uint8_t gyro_count;
     uint8_t accel_count;
     uint8_t mag_count;
-    float gyro[8][3];     // Max 8 samples (200Hz/25Hz)
-    float accel[8][3];    // Max 8 samples (200Hz/25Hz)
-    float mag[2][3];      // Max 2 samples (50Hz/25Hz)    
+    float gyro[8][3];     // Ex. 200Hz gyro / 25Hz usb messages = 8 samples
+    float accel[8][3];    // Ex. 200Hz accel / 25Hz usb messages = 8 samples
+    float mag[2][3];      // Ex. 50Hz magnetometer / 25Hz usb messages = 2 samples
   } SensorBatch;
 
   // -- Add data to struct here --
