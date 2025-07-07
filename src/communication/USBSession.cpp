@@ -101,9 +101,8 @@ void USBSession::processBatch(const BatchHeader& header, const float* data) {
     // Debug output
     std::cout << "[USB] Processing batch: gyro=" << (int)header.gyro_samples 
               << ", accel=" << (int)header.accel_samples 
-              << ", mag=" << (int)header.mag_samples 
-              << ", seq=" << header.sequence << std::endl;
-    
+              << ", mag=" << (int)header.mag_samples;  
+
     // Parse data from the buffer (order: mag -> accel -> gyro)
     const float* data_ptr = data;
     
@@ -208,9 +207,9 @@ void USBSession::processBatch(const BatchHeader& header, const float* data) {
 
 void USBSession::readPacketHeader() {
     auto self(shared_from_this());
-    // Read fixed-size header (5 bytes after sync) - removed packet_type
+    // Read fixed-size header (3 bytes after sync) 
     boost::asio::async_read(serial_port_, 
-        boost::asio::buffer(binary_buffer_.data(), 5),
+        boost::asio::buffer(binary_buffer_.data(), 3),
         [this, self](const boost::system::error_code& ec, std::size_t bytes_transferred) {
             if (ec) {
                 std::cerr << "[USB] Header read error: " << ec.message() << std::endl;
@@ -219,17 +218,16 @@ void USBSession::readPacketHeader() {
                 return;
             }
             
-            // Parse header (no packet_type)
-            uint16_t sequence = (static_cast<uint16_t>(binary_buffer_[0]) << 8) | binary_buffer_[1];
+            // Parse header (order: mag, accel, gyro)
+            uint8_t mag_samples = binary_buffer_[0];
+            uint8_t accel_samples = binary_buffer_[1];
             uint8_t gyro_samples = binary_buffer_[2];
-            uint8_t accel_samples = binary_buffer_[3];
-            uint8_t mag_samples = binary_buffer_[4];
             
-            // Simplified validation (removed packet_type check)
+            // Simple validation
             if (gyro_samples > 7 || accel_samples > 7 || mag_samples > 7) {
-                std::cerr << "[USB] Invalid header: gyro=" << (int)gyro_samples 
+                std::cerr << "[USB] Invalid header: mag=" << (int)mag_samples 
                           << ", accel=" << (int)accel_samples 
-                          << ", mag=" << (int)mag_samples << ". Resyncing..." << std::endl;
+                          << ", gyro=" << (int)gyro_samples << ". Resyncing..." << std::endl;
                 read_state_ = ReadState::SYNC;
                 startReading();
                 return;
@@ -237,10 +235,9 @@ void USBSession::readPacketHeader() {
             
             // Store header info for data reading
             current_header_ = {
-                .sequence = sequence,
-                .gyro_samples = gyro_samples,
+                .mag_samples = mag_samples,
                 .accel_samples = accel_samples,
-                .mag_samples = mag_samples
+                .gyro_samples = gyro_samples
             };
             
             // Calculate data size: (gyro + accel + mag) * 3 floats each * 4 bytes per float
