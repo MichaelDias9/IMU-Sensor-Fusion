@@ -18,6 +18,11 @@ private:
     mutable float m_y_min; 
     mutable float m_y_max; 
 
+    // variables to keep tick labels alive
+    mutable std::vector<std::string> m_tick_label_strings;
+    mutable std::vector<const char*> m_tick_labels;
+    mutable std::vector<double> m_ticks;
+
 public:
     SensorPlot(const std::string name, const ThreadSafeRingBuffer3D<Capacity>& dataBuffer, const ThreadSafeRingBuffer<Capacity>& timeBuffer, float yMin=-1.1f, float yMax=1.1f)
         : m_name(name), m_data_buffer_ref(dataBuffer), m_time_buffer_ref(timeBuffer),
@@ -42,8 +47,26 @@ public:
                 ImPlot::SetupAxisLimits(ImAxis_X1, x_min, x_max, ImGuiCond_Always);
                 ImPlot::SetupAxisLimits(ImAxis_Y1, m_y_min, m_y_max, ImGuiCond_Once);
 
-                // Set x-axis labels format
-                ImPlot::SetupAxisFormat(ImAxis_X1, "%.0f");
+                // Clear previous tick data
+                m_ticks.clear();
+                m_tick_label_strings.clear();
+                m_tick_labels.clear();
+
+                // Generate ticks only at full seconds
+                int start_second = static_cast<int>(std::ceil(x_min));
+                int end_second = static_cast<int>(std::floor(x_max));
+
+                for (int i = start_second; i <= end_second; ++i) {
+                    if (i >= x_min && i <= x_max) {
+                        m_ticks.push_back(static_cast<double>(i));
+                        m_tick_label_strings.push_back(std::to_string(i));
+                        m_tick_labels.push_back(m_tick_label_strings.back().c_str());
+                    }
+                }
+              
+                if (!m_ticks.empty()) {
+                    ImPlot::SetupAxisTicks(ImAxis_X1, m_ticks.data(), static_cast<int>(m_ticks.size()), m_tick_labels.data());
+                }
 
                 // Handle Y-axis zoom 
                 if (ImPlot::IsPlotHovered() && !ImGui::GetIO().KeyCtrl && !ImGui::GetIO().KeyShift) {
