@@ -2,6 +2,7 @@
 #include <regex>
 #include <sstream>
 #include <iomanip>
+#include <cstring>
 
 #include "communication/WebSocketSession.h"
 #include "Config.h"
@@ -38,10 +39,10 @@ void WebSocketSession::run() {
 void WebSocketSession::handleConnection(tcp::socket socket) {
     std::cout << "[Server] New connection attempt" << std::endl;
     
-    if (ws_) {
-        std::cerr << "[Server] Rejecting connection - already connected" << std::endl;
-        return;
-    }
+    //if (ws_) {
+    //    std::cerr << "[Server] Rejecting connection - already connected" << std::endl;
+    ///    return;
+    //}
     
     std::cout << "[Server] Connection accepted" << std::endl;
     ws_.emplace(std::move(socket));
@@ -68,61 +69,74 @@ void WebSocketSession::readLoop() {
 }
 
 void WebSocketSession::processMessage(size_t bytes) {
-    std::string msg(static_cast<char*>(buffer_.data().data()), bytes);
-    // std::cout << "[Server] Received message: " << msg << std::endl;
-    // Verify minimum message length (flags + space)
-    if (msg.size() < 4 || msg[3] != ' ') {
-        std::cerr << "[Server] Invalid message format" << std::endl;
-        return;
-    }
-
-    // Parse sensor flags
-    bool hasMag = (msg[0] == '1');
-    bool hasAccel = (msg[1] == '1');
-    bool hasGyro = (msg[2] == '1');
-    std::string dataStr = msg.substr(4);
+    // Get raw binary data
+    const uint8_t* data = static_cast<const uint8_t*>(buffer_.data().data());
     
-    // Split comma-separated values
-    std::vector<float> values;
-    std::istringstream iss(dataStr);
-    std::string token;
-    while (std::getline(iss, token, ',')) {
-        try {
-            values.push_back(std::stof(token));
-        } catch (const std::exception& e) {
-            std::cerr << "[Server] Invalid float value: " << token << std::endl;
-            return;
-        }
-    }
-
-    // Validate data length
-    size_t expectedCount = (hasGyro + hasAccel + hasMag) * 3;
-    if (values.size() != expectedCount) {
-        std::cerr << "[Server] Data count mismatch. Expected " 
-                  << expectedCount << " values, got " << values.size() << std::endl;
+    // Verify minimum message length (sync + flags)
+    if (bytes < 2) {
+        std::cerr << "[Server] Message too short" << std::endl;
         return;
     }
-
-    // Process sensor data 
-    size_t index = 0;  
+    
+    // Check sync byte
+    if (data[0] != 0xAA) {
+        std::cerr << "[Server] Invalid sync byte: 0x" << std::hex << (int)data[0] << std::endl;
+        return;
+    }
+    
+    // Parse flags
+    uint8_t flags = data[1];
+    bool hasMag = (flags & 0x04) != 0;
+    bool hasAccel = (flags & 0x02) != 0;
+    bool hasGyro = (flags & 0x01) != 0;
+    
+    // Calculate expected payload size
+    size_t numFloats = (hasMag ? 3 : 0) + (hasAccel ? 3 : 0) + (hasGyro ? 3 : 0);
+    size_t expectedSize = 2 + (numFloats * 4); // 2 header bytes + float data
+    
+    if (bytes != expectedSize) {
+        std::cerr << "[Server] Size mismatch. Expected " << expectedSize 
+                  << " bytes, got " << bytes << std::endl;
+        return;
+    }
+    
+    // Extract float values from binary data
+    std::vector<float> values;
+    size_t offset = 2; // Skip sync and flags
+    
+    for (size_t i = 0; i < numFloats; i++) {
+        float val;
+        memcpy(&val, &data[offset], 4);
+        values.push_back(val);
+        offset += 4;
+    }
+    
+    // Process sensor data in order: mag, accel, gyro
+    size_t index = 0;
+    
     if (hasMag) {
-        std::cout << std::setprecision(6) << "Mag: " << values[index] << ", " << values[index+1] << ", " << values[index+2] << std::endl;
+        // std::cout << std::setprecision(6) << "Mag: " << values[index] << ", " 
+        //          << values[index+1] << ", " << values[index+2] << std::endl;
         complementaryFilter_.updateWithMag(values[index], values[index+1], values[index+2]);
         magDataBuffer_.append(values[index], values[index+1], values[index+2]);
         magTimestamp_ += magDeltaT;
         magTimesBuffer_.append(magTimestamp_);
         index += 3;
     }
+    
     if (hasAccel) {
-        std::cout << std::setprecision(6) << "Accel: " << values[index] << ", " << values[index+1] << ", " << values[index+2] << std::endl;
+        // std::cout << std::setprecision(6) << "Accel: " << values[index] << ", " 
+        //          << values[index+1] << ", " << values[index+2] << std::endl;
         complementaryFilter_.updateWithAccel(values[index], values[index+1], values[index+2]);
         accelDataBuffer_.append(values[index], values[index+1], values[index+2]);
         accelTimestamp_ += accelDeltaT;
         accelTimesBuffer_.append(accelTimestamp_);
         index += 3;
     }
+    
     if (hasGyro) {
-        std::cout << std::setprecision(6) << "Gyro: " << values[index] << ", " << values[index+1] << ", " << values[index+2] << std::endl;
+        // std::cout << std::setprecision(6) << "Gyro: " << values[index] << ", " 
+        //          << values[index+1] << ", " << values[index+2] << std::endl;
         complementaryFilter_.updateWithGyro(values[index], values[index+1], values[index+2]);
         gyroDataBuffer_.append(values[index], values[index+1], values[index+2]);
         gyroTimestamp_ += gyroDeltaT;
